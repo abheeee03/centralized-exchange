@@ -2,12 +2,9 @@ use std::{
     collections::HashMap,
     time::{SystemTime, UNIX_EPOCH},
 };
-
 use crate::{
-    AppState,
-    middleware::auth::AuthUser,
-    types::user::{
-        BalanceResponse, Cliams, OnRampInput, SignInResponse, SignupInputs, SignupResponse, User,
+    AppState, middleware::auth::AuthUser, types::user::{
+        AssetDepositInput, BalanceResponse, Cliams, DepositResponse, OnRampInput, SignInResponse, SignupInputs, SignupResponse, User,
     },
 };
 use actix_web::{
@@ -117,4 +114,19 @@ pub async fn onramp(
 
     balances.insert(user.0, exisiting_balance + body.amount);
     HttpResponse::Ok()
+}
+
+#[post("/deposit/{symbol}")]
+pub async fn deposit(app_state: web::Data<AppState>, body: Json<AssetDepositInput>, user: AuthUser, symbol: web::Path<String>) -> impl Responder {
+    let user_id = user.0;
+    let mut stock_balances = app_state.stock_balances.lock().unwrap();
+    let sym = symbol.into_inner();
+
+    let user_balances = stock_balances.entry(user_id).or_insert_with(HashMap::new);
+    let exisiting_balances = user_balances.get(&sym).unwrap_or(&0).clone();
+
+    user_balances.insert(sym, exisiting_balances + body.qty);
+    HttpResponse::Ok().json(DepositResponse {
+        message: String::from("Deposit Successful")
+    })
 }

@@ -47,3 +47,13 @@ pub struct OnRampInput {
 pub struct AuthErrorRepsonse {
     pub message: String
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct AssetDepositInput {
+    pub qty: u32
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DepositResponse {
+    pub message: String
+}
