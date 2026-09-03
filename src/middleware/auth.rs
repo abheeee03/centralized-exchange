@@ -32,9 +32,6 @@ impl FromRequest for AuthUser {
     type Future = Ready<Result<Self, Self::Error>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-
-        println!("req come to");
-
         let token = req
             .headers()
             .get("Authorization")
