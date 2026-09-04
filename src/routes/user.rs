@@ -1,9 +1,10 @@
-use std::{
-    collections::HashMap, sync::mpsc, time::{SystemTime, UNIX_EPOCH},
-};
 use crate::{
-    AppState, BalanceMessage, middleware::auth::AuthUser, types::user::{
-        AssetDepositInput, BalanceResponse, Cliams, DepositResponse, OnRampInput, SignInResponse, SignupInputs, SignupResponse, User,
+    AppState, BalanceMessage,
+    StockMessage::{Deposit, GetBalances},
+    middleware::auth::AuthUser,
+    types::user::{
+        AssetDepositInput, BalanceResponse, Cliams, DepositResponse, OnRampInput, SignInResponse,
+        SignupInputs, SignupResponse, User,
     },
 };
 use actix_web::{
@@ -12,6 +13,10 @@ use actix_web::{
 };
 use futures::channel::oneshot;
 use jsonwebtoken::{EncodingKey, Header, encode};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use uuid::Uuid;
 
 #[post("/signup")]
@@ -20,16 +25,15 @@ pub async fn sign_up(body: Json<SignupInputs>, app_data: web::Data<AppState>) ->
     let found_user = users_data.iter().find(|u| u.email == body.email);
     if found_user.is_none() {
         let new_id = Uuid::new_v4();
-        let mut stock_balances = app_data.stock_balances.lock().unwrap();
         users_data.push(User {
             id: new_id,
             email: body.email.clone(),
             // should ideally be hased
             password: body.password.clone(),
         });
-        app_data.usd_balance_tx.send(BalanceMessage::Onramp(new_id, 0));
-        stock_balances.insert(new_id, HashMap::new());
-
+        let _ = app_data
+            .usd_balance_tx
+            .send(BalanceMessage::Onramp(new_id, 0));
         HttpResponse::Ok().json(SignupResponse {
             message: String::from("User created!"),
         })
@@ -79,20 +83,19 @@ pub async fn sign_in(body: Json<SignupInputs>, app_data: web::Data<AppState>) ->
 #[get("/balance")]
 pub async fn balance(app_data: web::Data<AppState>, user: AuthUser) -> impl Responder {
     let user_id = user.0;
-    
-    let (tx, rx) = oneshot::channel::<u32>();
 
-    app_data.usd_balance_tx.send(BalanceMessage::GetBalance(user_id, tx));
-    
-    let usd_balance =  rx.await.unwrap();
-    
-    let stock_balance = app_data
-        .stock_balances
-        .lock()
-        .unwrap()
-        .get(&user_id)
-        .unwrap_or(&HashMap::new())
-        .clone();
+    let (usd_tx, usd_rx) = oneshot::channel::<u32>();
+    let _ = app_data
+        .usd_balance_tx
+        .send(BalanceMessage::GetBalance(user_id, usd_tx));
+    let usd_balance = usd_rx.await.unwrap();
+
+    let (stock_tx, stock_rx) = oneshot::channel::<HashMap<String, u32>>();
+    let _ = app_data
+        .stock_balances_tx
+        .send(GetBalances(user_id, stock_tx));
+    let stock_balance = stock_rx.await.unwrap();
+
     HttpResponse::Ok().json(BalanceResponse {
         usd_balance,
         stock_balance,
@@ -105,21 +108,43 @@ pub async fn onramp(
     user: AuthUser,
     app_data: web::Data<AppState>,
 ) -> impl Responder {
-    app_data.usd_balance_tx.send(BalanceMessage::Onramp(user.0, body.amount));
+    let res = app_data
+        .usd_balance_tx
+        .send(BalanceMessage::Onramp(user.0, body.amount));
+
+    match res {
+        Ok(_) => {
+            HttpResponse::Ok();
+        }
+        Err(err) => {
+            println!("{}", err);
+            HttpResponse::BadRequest();
+        }
+    }
+
     HttpResponse::Ok()
 }
 
 #[post("/deposit/{symbol}")]
-pub async fn deposit(app_state: web::Data<AppState>, body: Json<AssetDepositInput>, user: AuthUser, symbol: web::Path<String>) -> impl Responder {
-    let user_id = user.0;
-    let mut stock_balances = app_state.stock_balances.lock().unwrap();
-    let sym = symbol.into_inner();
+pub async fn deposit(
+    app_state: web::Data<AppState>,
+    body: Json<AssetDepositInput>,
+    user: AuthUser,
+    symbol: web::Path<String>,
+) -> impl Responder {
+    let res = app_state
+        .stock_balances_tx
+        .send(Deposit(user.0, symbol.to_string(), body.qty));
 
-    let user_balances = stock_balances.entry(user_id).or_insert_with(HashMap::new);
-    let exisiting_balances = user_balances.get(&sym).unwrap_or(&0).clone();
-
-    user_balances.insert(sym, exisiting_balances + body.qty);
-    HttpResponse::Ok().json(DepositResponse {
-        message: String::from("Deposit Successful")
-    })
+    match res {
+        Ok(_) => HttpResponse::Ok().json(DepositResponse {
+            message: String::from("Deposit Successful"),
+        }),
+        Err(err) => {
+            println!("error while depositing: {}", err);
+            HttpResponse::InternalServerError().json(DepositResponse {
+                message: String::from("depsit failed."),
+            })
+        }
+    }
 }
