@@ -31,7 +31,7 @@ pub async fn sign_up(body: Json<SignupInputs>, app_data: web::Data<AppState>) ->
             password: body.password.clone(),
         });
         let _ = app_data
-            .balances_tx
+            .tx
             .send(AppMessage::OnrampUsd(new_id, 0));
         HttpResponse::Ok().json(SignupResponse {
             message: String::from("User created!"),
@@ -85,13 +85,13 @@ pub async fn balance(app_data: web::Data<AppState>, user: AuthUser) -> impl Resp
 
     let (usd_tx, usd_rx) = oneshot::channel::<u32>();
     let _ = app_data
-        .balances_tx
+        .tx
         .send(AppMessage::GetUsdBalance(user_id, usd_tx));
     let usd_balance = usd_rx.await.unwrap();
 
     let (stock_tx, stock_rx) = oneshot::channel::<HashMap<String, u32>>();
     let _ = app_data
-        .balances_tx
+        .tx
         .send(AppMessage::GetStockBalances(user_id, stock_tx));
     let stock_balance = stock_rx.await.unwrap();
 
@@ -108,7 +108,7 @@ pub async fn onramp(
     app_data: web::Data<AppState>,
 ) -> impl Responder {
     let res = app_data
-        .balances_tx
+        .tx
         .send(AppMessage::OnrampUsd(user.0, body.amount));
 
     match res {
@@ -132,7 +132,7 @@ pub async fn deposit(
     symbol: web::Path<String>,
 ) -> impl Responder {
     let res = app_state
-        .balances_tx
+        .tx
         .send(AppMessage::DepositStock(user.0, symbol.to_string(), body.qty));
 
     match res {
