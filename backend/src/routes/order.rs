@@ -2,10 +2,11 @@ use actix_web::{
     HttpResponse, Responder, post,
     web::{self, Json},
 };
+use engine::orderbook::{CreateOrderReponse, OrderType};
 use futures::channel::oneshot;
 use serde::{Deserialize, Serialize};
 
-use crate::{AppMessage, AppState, engine::orderbook::{CreateOrderReponse, OrderType}, middleware::auth::AuthUser};
+use crate::{AppMessage, AppState, middleware::auth::AuthUser};
 
 #[derive(Serialize, Deserialize)]
 struct CreateOrderBody {

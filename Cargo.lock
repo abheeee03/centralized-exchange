@@ -222,6 +222,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "backend"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "engine",
+ "futures",
+ "jsonwebtoken",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -315,18 +328,6 @@ dependencies = [
  "jobserver",
  "libc",
  "shlex",
-]
-
-[[package]]
-name = "cex"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "futures",
- "jsonwebtoken",
- "serde",
- "serde_json",
- "uuid",
 ]
 
 [[package]]
@@ -603,6 +604,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "engine"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "uuid",
 ]
 
 [[package]]
