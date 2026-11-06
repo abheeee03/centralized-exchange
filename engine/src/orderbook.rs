@@ -9,34 +9,36 @@ pub enum OrderType {
     Ask,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Match {
-    taker: Uuid,
-    maker: Uuid,
-    price: u32,
-    qty: u32
+    pub taker: Uuid,
+    pub maker: Uuid,
+    pub price: u32,
+    pub qty: u32
 }
 
 pub struct Ask {
-    total_qty: u32,
-    orders: Vec<Order>
+    pub total_qty: u32,
+    pub orders: Vec<Order>
 }
 pub struct Bid {
-    total_qty: u32,
-    orders: Vec<Order>
+    pub total_qty: u32,
+    pub orders: Vec<Order>
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub struct Order {
     pub order_id: Uuid,
     pub user_id: Uuid,
+    pub price: u32,
     pub qty: u32,
     pub filled_qty: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CreateOrderReponse {
-    matches: Vec<Match>,
-    filled_qty: u32
+    pub matches: Vec<Match>,
+    pub filled_qty: u32
 }
 
 pub struct Orderbook {
@@ -54,7 +56,7 @@ impl Orderbook {
         }
     }
 
-    pub fn create_order(&mut self, order: Order, price: u32, order_type: OrderType) -> CreateOrderReponse {
+    pub fn create_order(&mut self, order: Order, order_type: OrderType) -> CreateOrderReponse {
         let mut remaining = order.qty;
         let mut matches: Vec<Match> = Vec::new();
 
@@ -65,6 +67,11 @@ impl Orderbook {
                         Some(p) => p,
                         None => break
                     };
+
+                    //limit
+                    if best_ask > order.price {
+                        break;
+                    }
                     
                     let remove_level = {
                         let level = self.asks.get_mut(&best_ask).unwrap();
@@ -104,6 +111,11 @@ impl Orderbook {
                         Some(p) => p,
                         None => break
                     };
+
+                    //limit
+                    if best_bid < order.price {
+                        break;
+                    }
                     
                     let remove_level = {
                         let level = self.bids.get_mut(&best_bid).unwrap();
@@ -142,13 +154,14 @@ impl Orderbook {
             let open_order = Order {
                 order_id: order.order_id,
                 user_id: order.user_id,
+                price: order.price,
                 qty: remaining,
                 filled_qty: 0
             };
 
             match order_type {
                 OrderType::Ask => {
-                    let level = self.asks.entry(price).or_insert(Ask {
+                    let level = self.asks.entry(order.price).or_insert(Ask {
                         total_qty: 0,
                         orders: Vec::new()
                     });
@@ -157,7 +170,7 @@ impl Orderbook {
                     level.orders.push(open_order);
                 },
                 OrderType::Bid => {
-                    let level = self.bids.entry(price).or_insert(Bid {
+                    let level = self.bids.entry(order.price).or_insert(Bid {
                         total_qty: 0,
                         orders: Vec::new()
                     });
@@ -169,7 +182,7 @@ impl Orderbook {
         }
         CreateOrderReponse {
             matches,
-            filled_qty: remaining
+            filled_qty: order.qty - remaining
         }
     }    
 }

@@ -76,11 +76,11 @@ async fn main() -> std::io::Result<()> {
                     let result = orderbook.create_order(
                         Order {
                             order_id: new_id,
+                            price: 10,
                             user_id,
                             qty,
                             filled_qty: 0,
                         },
-                        price,
                         order_type,
                     );
                     let _ = tx.send(result);
