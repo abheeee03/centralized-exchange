@@ -2,7 +2,9 @@ use actix_web::{
     App, HttpServer,
     web::{self},
 };
-use engine::orderbook::{CreateOrderReponse, Order, OrderType, Orderbook};
+use engine::orderbook::{
+    CancelledOrder, CreateOrderReponse, Depth, OpenOrder, Order, OrderType, Orderbook,
+};
 use futures::channel::oneshot;
 use routes::{
     order,
@@ -29,6 +31,9 @@ enum AppMessage {
     DepositStock(Uuid, String, u32),
     GetStockBalances(Uuid, oneshot::Sender<HashMap<String, u32>>),
     CreateOrder(Uuid, OrderType, u32, u32, oneshot::Sender<CreateOrderReponse>),
+    CancelOrder(Uuid, Uuid, oneshot::Sender<Option<CancelledOrder>>),
+    GetDepth(oneshot::Sender<Depth>),
+    GetOpenOrders(Uuid, oneshot::Sender<Vec<OpenOrder>>),
 }
 
 struct AppState {
@@ -72,18 +77,26 @@ async fn main() -> std::io::Result<()> {
                     let _ = tx.send(all_stocks.clone());
                 }
                 AppMessage::CreateOrder(user_id, order_type, price, qty, tx) => {
-                    let new_id = Uuid::new_v4();
                     let result = orderbook.create_order(
                         Order {
-                            order_id: new_id,
-                            price: 10,
+                            order_id: Uuid::new_v4(),
                             user_id,
+                            price,
                             qty,
                             filled_qty: 0,
                         },
                         order_type,
                     );
                     let _ = tx.send(result);
+                }
+                AppMessage::CancelOrder(user_id, order_id, tx) => {
+                    let _ = tx.send(orderbook.cancel(user_id, order_id));
+                }
+                AppMessage::GetDepth(tx) => {
+                    let _ = tx.send(orderbook.depth());
+                }
+                AppMessage::GetOpenOrders(user_id, tx) => {
+                    let _ = tx.send(orderbook.open_orders(user_id));
                 }
             }
         }
@@ -98,6 +111,9 @@ async fn main() -> std::io::Result<()> {
             .service(onramp)
             .service(deposit)
             .service(order::create_order)
+            .service(order::cancel_order)
+            .service(order::depth)
+            .service(order::open_orders)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
